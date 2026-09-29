@@ -35,7 +35,7 @@ export const searchBranches = protectedProcedure
 		if (!localProject) {
 			return {
 				defaultBranch: null as string | null,
-				checkedOutBranch: null as string | null,
+				checkedOutBranch: null,
 				items: [] as BranchRow[],
 				nextCursor: null as string | null,
 			};
