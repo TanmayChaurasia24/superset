@@ -1072,8 +1072,7 @@ export function NewWorkspaceScreen({
 												On branch{" "}
 												{pickerProps.isBranchesLoading
 													? "..."
-													: (pickerProps.branches.find((b) => b.isCheckedOut)
-															?.name ?? "unknown")}
+													: (pickerProps.checkedOutBranch ?? "unknown")}
 											</Trans>
 										</span>
 									)}
