@@ -528,7 +528,7 @@ export class PortManager extends EventEmitter {
 		const validPortInfos = portInfos.filter(
 			(info) =>
 				!IGNORED_PORTS.has(info.port) &&
-				!IGNORED_PROCESSES.has(info.processName.toLocaleLowerCase()),
+				!IGNORED_PROCESSES.has(info.processName.toLowerCase()),
 		);
 		const dedupedPortInfos = dedupePortInfosByPort(validPortInfos);
 
