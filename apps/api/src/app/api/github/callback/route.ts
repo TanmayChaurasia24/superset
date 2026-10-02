@@ -4,29 +4,55 @@ import { Client } from "@upstash/qstash";
 import { and, eq, ne } from "drizzle-orm";
 
 import { env } from "@/env";
-import { exitOAuthFlow, STATE_COOKIES } from "@/lib/integrations/oauthFlow";
+import {
+	exitOAuthFlow,
+	readStateCookie,
+	STATE_COOKIES,
+} from "@/lib/integrations/oauthFlow";
 import { resolveCallback } from "@/lib/integrations/resolveCallback";
+import { verifySignedState } from "@/lib/oauth-state";
 import { githubApp } from "../octokit";
 
 const qstash = new Client({ token: env.QSTASH_TOKEN });
 
-const settingsUrl = `${env.NEXT_PUBLIC_WEB_URL}/integrations/github`;
+function getSettingsUrl(
+	organizationId?: string,
+	query?: Record<string, string>,
+) {
+	const url = new URL(`${env.NEXT_PUBLIC_WEB_URL}/integrations/github`);
+	if (organizationId) url.searchParams.set("organizationId", organizationId);
+	if (query) {
+		for (const [key, value] of Object.entries(query)) {
+			url.searchParams.set(key, value);
+		}
+	}
+	return url.toString();
+}
 
 /**
  * Callback handler for GitHub App installation.
  * GitHub redirects here after the user installs/configures the app.
  */
 export async function GET(request: Request) {
+	let requestedOrganizationId: string | undefined;
+	const bound = readStateCookie(request, STATE_COOKIES.github);
+	if (bound) {
+		const stateData = verifySignedState(bound);
+		if (stateData) requestedOrganizationId = stateData.organizationId;
+	}
+
 	if (new URL(request.url).searchParams.get("setup_action") === "cancel") {
 		return exitOAuthFlow(
 			STATE_COOKIES.github,
-			`${settingsUrl}?error=installation_cancelled`,
+			getSettingsUrl(requestedOrganizationId, {
+				error: "installation_cancelled",
+			}),
 		);
 	}
 
 	const callback = await resolveCallback(request, {
 		params: ["installation_id"],
-		redirect: (error) => `${settingsUrl}?error=${error}`,
+		redirect: (error) => getSettingsUrl(requestedOrganizationId, { error }),
 		cookie: STATE_COOKIES.github,
 	});
 	if (callback instanceof Response) return callback;
@@ -48,7 +74,9 @@ export async function GET(request: Request) {
 			});
 
 		if (!installationResult) {
-			return exit(`${settingsUrl}?error=installation_fetch_failed`);
+			return exit(
+				getSettingsUrl(organizationId, { error: "installation_fetch_failed" }),
+			);
 		}
 
 		const installation = installationResult.data;
@@ -75,7 +103,9 @@ export async function GET(request: Request) {
 			});
 
 		if (existingForInstallation) {
-			return exit(`${settingsUrl}?error=already_connected`);
+			return exit(
+				getSettingsUrl(organizationId, { error: "already_connected" }),
+			);
 		}
 
 		// Save the installation to our database
@@ -105,7 +135,7 @@ export async function GET(request: Request) {
 			.returning();
 
 		if (!savedInstallation) {
-			return exit(`${settingsUrl}?error=save_failed`);
+			return exit(getSettingsUrl(organizationId, { error: "save_failed" }));
 		}
 
 		// Queue initial sync job. In development the queue cannot reach
@@ -132,12 +162,16 @@ export async function GET(request: Request) {
 				"[github/callback] Failed to queue initial sync job:",
 				error,
 			);
-			return exit(`${settingsUrl}?warning=sync_queue_failed`);
+			return exit(
+				getSettingsUrl(organizationId, { warning: "sync_queue_failed" }),
+			);
 		}
 
-		return exit(`${settingsUrl}?success=github_installed`);
+		return exit(
+			getSettingsUrl(organizationId, { success: "github_installed" }),
+		);
 	} catch (error) {
 		console.error("[github/callback] Unexpected error:", error);
-		return exit(`${settingsUrl}?error=unexpected`);
+		return exit(getSettingsUrl(organizationId, { error: "unexpected" }));
 	}
 }

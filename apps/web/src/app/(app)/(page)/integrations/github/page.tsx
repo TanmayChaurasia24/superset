@@ -15,6 +15,7 @@ import { api } from "@/trpc/server";
 import { IntegrationErrorHandler } from "../components/IntegrationErrorHandler";
 import { ConnectionControls } from "./components/ConnectionControls";
 import { RepositoryList } from "./components/RepositoryList";
+import { SyncOrganization } from "./components/SyncOrganization";
 
 export default async function GitHubIntegrationPage(props: {
 	searchParams: Promise<{ organizationId?: string }>;
@@ -83,7 +84,13 @@ export default async function GitHubIntegrationPage(props: {
 	const sessionOrganization = await trpc.user.myOrganization.query();
 
 	const params = await props.searchParams;
-	const activeOrganizationId = params.organizationId || sessionOrganization?.id;
+	const urlOrganizationId = params.organizationId;
+
+	if (urlOrganizationId && urlOrganizationId !== sessionOrganization?.id) {
+		return <SyncOrganization organizationId={urlOrganizationId} />;
+	}
+
+	const activeOrganizationId = sessionOrganization?.id;
 
 	if (!activeOrganizationId) {
 		return (
